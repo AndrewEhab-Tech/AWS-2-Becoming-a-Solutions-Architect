@@ -1,9 +1,10 @@
-# Serverless Image Processing Pipeline with S3, SQS & Lambda
+# AWS 2: Becoming a Solutions Architect
 
-> **AWS Solutions Architect - Associate | Graduation Project**  
+> **Graduation Project: Serverless Image Processing Pipeline**  
+> **Course:** AWS 2: Becoming a Solutions Architect  
 > **Author:** Graduation Project Candidate  
 > **Architecture Pattern:** Serverless Event-Driven Architecture  
-> **Course Instructor:** Ayman Aly Mahmoud  
+> **Instructor:** Ayman Aly Mahmoud  
 
 [![AWS](https://img.shields.io/badge/AWS-Solutions%20Architect%20Associate-232F3E?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%20v1.5+-623CE4?logo=terraform&logoColor=white)](https://www.terraform.io/)
