@@ -1,0 +1,107 @@
+{
+  "Comment": "Production-Grade Serverless Image Processing Pipeline Workflow",
+  "StartAt": "ValidateImage",
+  "States": {
+    "ValidateImage": {
+      "Type": "Task",
+      "Resource": "${ValidateLambdaArn}",
+      "Comment": "Validates image size, format, and S3 accessibility",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.errorInfo",
+          "Next": "HandleProcessingFailure"
+        }
+      ],
+      "Next": "ResizeImage"
+    },
+    "ResizeImage": {
+      "Type": "Task",
+      "Resource": "${ResizeLambdaArn}",
+      "Comment": "Generates thumbnail, medium, and large image variations",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.errorInfo",
+          "Next": "HandleProcessingFailure"
+        }
+      ],
+      "Next": "ApplyWatermark"
+    },
+    "ApplyWatermark": {
+      "Type": "Task",
+      "Resource": "${WatermarkLambdaArn}",
+      "Comment": "Applies semi-transparent branding watermark on the medium variant",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.errorInfo",
+          "Next": "HandleProcessingFailure"
+        }
+      ],
+      "Next": "SaveMetadata"
+    },
+    "SaveMetadata": {
+      "Type": "Task",
+      "Resource": "${MetadataLambdaArn}",
+      "Comment": "Persists image dimensions and CloudFront URLs into DynamoDB",
+      "Retry": [
+        {
+          "ErrorEquals": ["DynamoDB.ProvisionedThroughputExceededException", "Lambda.ServiceException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.errorInfo",
+          "Next": "HandleProcessingFailure"
+        }
+      ],
+      "Next": "NotifySuccess"
+    },
+    "NotifySuccess": {
+      "Type": "Task",
+      "Resource": "${NotificationLambdaArn}",
+      "Comment": "Sends SNS message upon successful completion",
+      "End": true
+    },
+    "HandleProcessingFailure": {
+      "Type": "Task",
+      "Resource": "${NotificationLambdaArn}",
+      "Comment": "Sends alert via SNS regarding the pipeline failure",
+      "Next": "PipelineExecutionFailed"
+    },
+    "PipelineExecutionFailed": {
+      "Type": "Fail",
+      "Cause": "Image processing pipeline failed at one of the workflow stages.",
+      "Error": "PipelineWorkflowExecutionError"
+    }
+  }
+}

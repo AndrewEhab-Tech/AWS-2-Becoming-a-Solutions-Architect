@@ -1,0 +1,8 @@
+# Example Terraform Variables Configuration
+aws_region         = "us-east-1"
+project_name       = "serverless-image-pipeline"
+environment        = "prod"
+notification_email = "your-email@example.com"
+watermark_text     = "© AWS SAA Graduation Project"
+# Klayers public Pillow layer for Python 3.11 in us-east-1:
+pillow_layer_arn   = "arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p311-Pillow:4"

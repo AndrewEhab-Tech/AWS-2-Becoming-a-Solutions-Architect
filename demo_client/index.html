@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serverless Image Pipeline - Demo Client</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen py-10 px-4">
+  <div class="max-w-2xl mx-auto bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
+    <div class="flex items-center space-x-3 mb-6">
+      <span class="text-3xl">⚡</span>
+      <div>
+        <h1 class="text-2xl font-bold text-white">Serverless Image Processing Pipeline</h1>
+        <p class="text-sm text-slate-400">AWS Solutions Architect - Associate Graduation Project</p>
+      </div>
+    </div>
+
+    <!-- API Config -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-slate-300 mb-2">API Gateway Upload Endpoint</label>
+      <input type="text" id="apiEndpoint" placeholder="https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/upload-url" 
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+    </div>
+
+    <!-- CloudFront Domain Config -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-slate-300 mb-2">CloudFront Domain (Optional, for CDN viewing)</label>
+      <input type="text" id="cfDomain" placeholder="d123456abcdef8.cloudfront.net" 
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+    </div>
+
+    <!-- File Picker -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-slate-300 mb-2">Select Image to Process (.jpg, .png)</label>
+      <div class="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center hover:border-blue-500 transition cursor-pointer" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="updateFilePreview(this)">
+        <p id="filePrompt" class="text-slate-400 text-sm">Click here to choose an image file (max 15MB)</p>
+        <p id="fileName" class="text-blue-400 font-semibold text-sm mt-2 hidden"></p>
+      </div>
+    </div>
+
+    <!-- Upload Button -->
+    <button onclick="startUploadProcess()" id="uploadBtn" 
+            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg shadow transition flex justify-center items-center">
+      <span>Upload &amp; Trigger Pipeline</span>
+    </button>
+
+    <!-- Logs / Console -->
+    <div class="mt-8">
+      <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Execution Log</h3>
+      <div id="logConsole" class="bg-slate-950 rounded-lg p-4 font-mono text-xs text-green-400 h-48 overflow-y-auto border border-slate-800 space-y-1">
+        <p class="text-slate-500">Waiting for user input...</p>
+      </div>
+    </div>
+
+    <!-- Output preview links -->
+    <div id="resultBox" class="mt-6 p-4 bg-slate-950 border border-green-800 rounded-lg hidden">
+      <h4 class="text-green-400 font-semibold mb-2">✅ Image Successfully Dispatched to Pipeline!</h4>
+      <p class="text-xs text-slate-400 mb-3">The S3 event notification has published to SQS, triggering the Step Functions orchestration state machine.</p>
+      <div id="variantLinks" class="space-y-1 text-xs"></div>
+    </div>
+  </div>
+
+  <script>
+    function log(msg, color = 'text-green-400') {
+      const consoleBox = document.getElementById('logConsole');
+      const p = document.createElement('p');
+      p.className = color;
+      p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      consoleBox.appendChild(p);
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+
+    function updateFilePreview(input) {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        document.getElementById('filePrompt').classList.add('hidden');
+        const fn = document.getElementById('fileName');
+        fn.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        fn.classList.remove('hidden');
+      }
+    }
+
+    async function startUploadProcess() {
+      const apiEndpoint = document.getElementById('apiEndpoint').value.trim();
+      const cfDomain = document.getElementById('cfDomain').value.trim();
+      const fileInput = document.getElementById('fileInput');
+
+      if (!apiEndpoint) {
+        alert('Please enter your API Gateway endpoint.');
+        return;
+      }
+
+      if (!fileInput.files || !fileInput.files[0]) {
+        alert('Please choose an image file.');
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const uploadBtn = document.getElementById('uploadBtn');
+      uploadBtn.disabled = true;
+      uploadBtn.classList.add('opacity-50');
+
+      try {
+        log(`1. Requesting pre-signed URL from API Gateway for: ${file.name}...`);
+        
+        const presignResponse = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type || 'image/jpeg'
+          })
+        });
+
+        if (!presignResponse.ok) {
+          throw new Error(`API Gateway error: ${presignResponse.status} ${await presignResponse.text()}`);
+        }
+
+        const data = await presignResponse.json();
+        log(`2. Pre-signed URL received successfully! S3 Key: ${data.key}`);
+        log(`3. Directly uploading ${file.name} to Amazon S3 Source bucket...`);
+
+        const s3UploadResponse = await fetch(data.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type || 'image/jpeg' },
+          body: file
+        });
+
+        if (!s3UploadResponse.ok) {
+          throw new Error(`S3 direct upload failed with status: ${s3UploadResponse.status}`);
+        }
+
+        log(`4. Direct upload completed! S3 ObjectCreated event dispatched.`, 'text-blue-400');
+        log(`5. Pipeline flow: S3 Event ➔ SQS Queue ➔ Step Functions State Machine.`, 'text-purple-400');
+        log(`6. Image will be validated, resized (Thumb, Medium, Large), watermarked, and saved to DynamoDB.`, 'text-amber-400');
+
+        // Show result box
+        const resultBox = document.getElementById('resultBox');
+        resultBox.classList.remove('hidden');
+
+        const imageId = data.imageId;
+        const linksBox = document.getElementById('variantLinks');
+        linksBox.innerHTML = '';
+
+        const variants = ['thumbnail.jpg', 'medium.jpg', 'large.jpg', 'watermarked.jpg'];
+        variants.forEach(v => {
+          const cdnUrl = cfDomain ? `https://${cfDomain}/processed/${imageId}/${v}` : `#`;
+          linksBox.innerHTML += `
+            <div class="flex justify-between items-center py-1 border-b border-slate-800">
+              <span class="text-slate-300 font-mono">${v}</span>
+              ${cfDomain ? `<a href="${cdnUrl}" target="_blank" class="text-blue-400 hover:underline">Open in CDN ↗</a>` : `<span class="text-slate-500">processed/${imageId}/${v}</span>`}
+            </div>
+          `;
+        });
+
+      } catch (err) {
+        log(`Error: ${err.message}`, 'text-red-400');
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.classList.remove('opacity-50');
+      }
+    }
+  </script>
+</body>
+</html>

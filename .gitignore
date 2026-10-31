@@ -1,0 +1,22 @@
+# Terraform files
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!terraform.tfvars.example
+dist/
+*.zip
+
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+venv/
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db

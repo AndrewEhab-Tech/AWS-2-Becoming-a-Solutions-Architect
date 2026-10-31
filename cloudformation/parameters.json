@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "serverless-image-pipeline"
+  },
+  {
+    "ParameterKey": "NotificationEmail",
+    "ParameterValue": "student@example.com"
+  },
+  {
+    "ParameterKey": "WatermarkText",
+    "ParameterValue": "© AWS SAA Graduation Project"
+  }
+]
